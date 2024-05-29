@@ -1,0 +1,131 @@
+1............accuracy 94 89
+from catboost import CatBoostClassifier, Pool
+from sklearn.metrics import accuracy_score, roc_auc_score
+from sklearn.model_selection import train_test_split
+
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Initialize Pools for training and testing data, specifying categorical features
+train_pool = Pool(X_train, y_train, cat_features=cat_cols_idx)
+test_pool = Pool(X_test, y_test, cat_features=cat_cols_idx)
+
+# Specify the training parameters for the CatBoostClassifier
+model = CatBoostClassifier(iterations=1500,
+                           depth=6,  # Increased depth for a more complex model
+                           border_count=254,  # Increased for numerical features
+                           l2_leaf_reg=0.1,
+                           learning_rate=0.05,  # Lowered learning rate for more stable convergence
+                           class_weights=class_weights,
+                           early_stopping_rounds=10,
+                           verbose=0)
+
+# Train the model using the training data
+model.fit(train_pool, eval_set=test_pool)
+
+# Make predictions using the resulting trained model for both training and testing data
+y_train_pred = model.predict(X_train)  # Predicted labels for training data
+y_test_pred = model.predict(X_test)    # Predicted labels for testing data
+
+# Calculate accuracy for both training and testing data
+accuracy_train = accuracy_score(y_train, y_train_pred)
+accuracy_test = accuracy_score(y_test, y_test_pred)
+
+# Calculate the ROC AUC score for both training and testing data
+y_train_probs = model.predict_proba(X_train)[:, 1]  # Predicted probabilities for training data
+y_test_probs = model.predict_proba(X_test)[:, 1]    # Predicted probabilities for testing data
+roc_auc_train = roc_auc_score(y_train, y_train_probs)  # ROC AUC score for training data
+roc_auc_test = roc_auc_score(y_test, y_test_probs)     # ROC AUC score for testing data
+
+# Print the accuracy and ROC AUC scores for the training and testing data
+print(f"Accuracy for train: {round(accuracy_train * 100, 2)}%, and for test: {round(accuracy_test * 100, 2)}%")
+print(f"ROC AUC score for train: {round(roc_auc_train, 4)}, and for test: {round(roc_auc_test, 4)}")
+
+
+
+
+
+
+
+
+
+
+
+
+2.... OPTIMIZED CODE
+
+
+
+
+
+from catboost import CatBoostClassifier, Pool
+from sklearn.metrics import accuracy_score, roc_auc_score
+from sklearn.model_selection import train_test_split
+from skopt import BayesSearchCV
+
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Initialize Pools for training and testing data, specifying categorical features
+train_pool = Pool(X_train, y_train, cat_features=cat_cols_idx)
+test_pool = Pool(X_test, y_test, cat_features=cat_cols_idx)
+
+# Define the reduced parameter search space
+param_space = {
+    'iterations': (100, 500),  # Reduced range
+    'depth': (4, 8),             # Reduced range
+    'learning_rate': (0.01, 0.1),
+    'l2_leaf_reg': (0.01, 0.1),  # Reduced range
+    'border_count': (32, 128),   # Reduced range
+}
+
+# Specify the CatBoostClassifier
+model = CatBoostClassifier(class_weights=class_weights, early_stopping_rounds=10, verbose=0)
+
+# Perform Bayesian optimization with BayesSearchCV
+optimal_params = BayesSearchCV(model, param_space, n_iter=20, cv=5, n_jobs=-1, scoring='roc_auc', random_state=42)
+
+# Fit the optimized model on the training data
+optimal_params.fit(X_train, y_train, eval_set=(X_test, y_test), cat_features=cat_cols_idx)
+
+# Make predictions using the resulting trained model for testing data
+y_test_pred = optimal_params.predict(X_test)
+y_test_probs = optimal_params.predict_proba(X_test)[:, 1]
+
+# Calculate accuracy and ROC AUC score for testing data
+accuracy_test = accuracy_score(y_test, y_test_pred)
+roc_auc_test = roc_auc_score(y_test, y_test_probs)
+
+# Print the accuracy and ROC AUC scores for testing data
+print(f"Optimized parameters: {optimal_params.best_params_}")
+print(f"Accuracy for test: {round(accuracy_test * 100, 2)}%")
+print(f"ROC AUC score for test: {round(roc_auc_test, 4)}")
+
+
+
+3......NORMAL CODE ROC ACCURACY TRAIN 95.81,TEST:88.54
+
+
+from catboost import CatBoostClassifier, Pool
+from sklearn.metrics import accuracy_score
+
+# ... (your existing code for initializing pools and setting up the model)
+
+# Train the model using the training data
+model.fit(train_pool, eval_set=test_pool)
+
+# Make predictions using the resulting trained model for both training and testing data
+y_train_pred = model.predict(train_pool)  # Predicted classes for training data
+y_test_pred = model.predict(test_pool)    # Predicted classes for testing data
+
+# Calculate accuracy for both training and testing data
+accuracy_train = accuracy_score(y_train, y_train_pred)  # Accuracy for training data
+accuracy_test = accuracy_score(y_test, y_test_pred)     # Accuracy for testing data
+
+# Calculate the ROC AUC score for both training and testing data (unchanged from your code)
+roc_auc_train = roc_auc_score(y_train, model.predict_proba(train_pool)[:, 1])
+roc_auc_test = roc_auc_score(y_test, model.predict_proba(test_pool)[:, 1])
+
+# Print the accuracy and ROC AUC scores for the training and testing data
+print(f"Accuracy for train: {round(accuracy_train, 4)}, and for test: {round(accuracy_test, 4)}")
+print(f"ROC AUC score for train: {round(roc_auc_train, 4)}, and for test: {round(roc_auc_test, 4)}")
